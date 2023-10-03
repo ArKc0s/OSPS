@@ -1,87 +1,76 @@
 import os
 import time
-import sys
 import signal
+import sys
 import mmap
-from datetime import datetime
+from dispatcher import serveur_dispatcher
+from worker import serveur_worker
 
-def serveur_dispatcher(shared_mem, pipe_out_dwtube, pipe_in_wdtube):
-    token = True  # Initialise avec le jeton
-    while True:
-        if token:
-            shared_mem.seek(0)
-            shared_mem.write(b"get_time" + b'\x00' * (20 - len("get_time")))
-            print("Dispatcher: J'ai écrit la commande 'get_time' dans la mémoire partagée.")
-            os.write(pipe_out_dwtube, b"ping")
-            token = False
-        else:
-            msg = os.read(pipe_in_wdtube, 4).decode('utf-8')
-            if msg == "pong":
-                shared_mem.seek(0)
-                time_response = shared_mem.read(50).decode('utf-8').rstrip('\x00')
-                print(f"Dispatcher: J'ai reçu l'heure : {time_response}")
-                token = True
-        time.sleep(2)
+# Chemins vers les pipes
+dw_pipe_path = 'pipes/dwtube'
+wd_pipe_path = 'pipes/wdtube'
 
-def serveur_worker(shared_mem, pipe_in_dwtube, pipe_out_wdtube):
-    while True:
-        msg = os.read(pipe_in_dwtube, 4).decode('utf-8')
-        if msg == "ping":
-            shared_mem.seek(0)
-            command = shared_mem.read(20).decode('utf-8').rstrip('\x00')
-            if command == "get_time":
-                print(f"Worker: J'ai reçu la commande : {command}")
-                current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                shared_mem.seek(0)
-                shared_mem.write((current_time + '\x00' * (50 - len(current_time))).encode('utf-8'))
-                print(f"Worker: J'ai écrit l'heure : {current_time}")
-            os.write(pipe_out_wdtube, b"pong")
-        else:
-            print("Worker: En attente du jeton...")
-        time.sleep(2)
+# Crée les dossiers et pipes si besoin
+if not os.path.exists('pipes'):
+    os.makedirs('pipes')
+if not os.path.exists(dw_pipe_path):
+    os.mkfifo(dw_pipe_path)
+if not os.path.exists(wd_pipe_path):
+    os.mkfifo(wd_pipe_path)
+
+child_pids = []
+
+def kill_children(signum, frame):
+    print("Watchdog: Terminaison en cours...")
+    for pid in child_pids:
+        os.kill(pid, signal.SIGTERM)
+    os.remove(dw_pipe_path)
+    os.remove(wd_pipe_path)
+    sys.exit(0)
+
+def check_alive(pid):
+    try:
+        os.kill(pid, signal.SIG_DFL)
+        return True
+    except ProcessLookupError:
+        return False
+
+def launch_server(func, args_tuple, child_pids):
+    pid = os.fork()
+    if pid == -1:
+        print("Erreur lors du fork.")
+        sys.exit(1)
+    elif pid == 0:
+        func(*args_tuple)
+    else:
+        print(f"Watchdog: J'ai lancé un serveur avec le PID {pid}.")
+        child_pids.append(pid)
+        return pid
 
 if __name__ == "__main__":
-    child_pids = []
-
-    shared_mem = mmap.mmap(-1, 1024)
-
-    pipe_in_dwtube, pipe_out_dwtube = os.pipe()
-    pipe_in_wdtube, pipe_out_wdtube = os.pipe()
-
-    def kill_children(signum, frame):
-        global child_pids
-        print("Watchdog: Terminaison en cours...")
-        for pid in child_pids:
-            os.kill(pid, signal.SIGTERM)
-        sys.exit(0)
-
     signal.signal(signal.SIGTERM, kill_children)
     signal.signal(signal.SIGINT, kill_children)
 
     print("Je suis le watchdog.")
 
-    pid = os.fork()
-    if pid == -1:
-        print("Erreur lors du fork pour le serveur dispatcher.")
-        sys.exit(1)
-    elif pid == 0:
-        os.close(pipe_in_dwtube)
-        os.close(pipe_out_wdtube)
-        serveur_dispatcher(shared_mem, pipe_out_dwtube, pipe_in_wdtube)
-    else:
-        child_pids.append(pid)
+    shared_mem = mmap.mmap(-1, 1024)
+    pipe_in_dwtube = os.open(dw_pipe_path, os.O_RDONLY | os.O_NONBLOCK)
+    pipe_out_dwtube = os.open(dw_pipe_path, os.O_WRONLY)
+    pipe_in_wdtube = os.open(wd_pipe_path, os.O_RDONLY | os.O_NONBLOCK)
+    pipe_out_wdtube = os.open(wd_pipe_path, os.O_WRONLY)
 
-        pid = os.fork()
-        if pid == -1:
-            print("Erreur lors du fork pour le serveur worker.")
-            sys.exit(1)
-        elif pid == 0:
-            os.close(pipe_out_dwtube)
-            os.close(pipe_in_wdtube)
-            serveur_worker(shared_mem, pipe_in_dwtube, pipe_out_wdtube)
-        else:
-            child_pids.append(pid)
-            print("Watchdog: J'ai lancé les serveurs.")
+    dispatcher_pid = launch_server(serveur_dispatcher, (shared_mem, pipe_out_dwtube, pipe_in_wdtube), child_pids)
+    worker_pid = launch_server(serveur_worker, (shared_mem, pipe_in_dwtube, pipe_out_wdtube), child_pids)
+
+    print("Watchdog: J'ai lancé les serveurs.")
 
     while True:
-        time.sleep(1)
+        if not check_alive(dispatcher_pid):
+            print("Watchdog: Relance du serveur dispatcher.")
+            dispatcher_pid = launch_server(serveur_dispatcher, (shared_mem, pipe_out_dwtube, pipe_in_wdtube), child_pids)
+
+        if not check_alive(worker_pid):
+            print("Watchdog: Relance du serveur worker.")
+            worker_pid = launch_server(serveur_worker, (shared_mem, pipe_in_dwtube, pipe_out_wdtube), child_pids)
+
+        time.sleep(5)  # Vérifie l'état toutes les 5 secondes
