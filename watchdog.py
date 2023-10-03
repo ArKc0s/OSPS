@@ -10,7 +10,7 @@ def serveur_dispatcher(shared_mem, pipe_out_dwtube, pipe_in_wdtube):
     while True:
         if token:
             shared_mem.seek(0)
-            shared_mem.write(b"get_time")
+            shared_mem.write(b"get_time" + b'\x00' * (20 - len("get_time")))
             print("Dispatcher: J'ai écrit la commande 'get_time' dans la mémoire partagée.")
             os.write(pipe_out_dwtube, b"ping")
             token = False
@@ -18,7 +18,7 @@ def serveur_dispatcher(shared_mem, pipe_out_dwtube, pipe_in_wdtube):
             msg = os.read(pipe_in_wdtube, 4).decode('utf-8')
             if msg == "pong":
                 shared_mem.seek(0)
-                time_response = shared_mem.read(50).decode('utf-8')
+                time_response = shared_mem.read(50).decode('utf-8').rstrip('\x00')
                 print(f"Dispatcher: J'ai reçu l'heure : {time_response}")
                 token = True
         time.sleep(2)
@@ -28,32 +28,32 @@ def serveur_worker(shared_mem, pipe_in_dwtube, pipe_out_wdtube):
         msg = os.read(pipe_in_dwtube, 4).decode('utf-8')
         if msg == "ping":
             shared_mem.seek(0)
-            command = shared_mem.read(20).decode('utf-8').strip()
+            command = shared_mem.read(20).decode('utf-8').rstrip('\x00')
             if command == "get_time":
+                print(f"Worker: J'ai reçu la commande : {command}")
                 current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 shared_mem.seek(0)
-                shared_mem.write(current_time.encode('utf-8'))
+                shared_mem.write((current_time + '\x00' * (50 - len(current_time))).encode('utf-8'))
                 print(f"Worker: J'ai écrit l'heure : {current_time}")
             os.write(pipe_out_wdtube, b"pong")
         else:
             print("Worker: En attente du jeton...")
         time.sleep(2)
 
-def kill_children(signum, frame):
-    global child_pids
-    print("Watchdog: Terminaison en cours...")
-    for pid in child_pids:
-        os.kill(pid, signal.SIGTERM)
-    sys.exit(0)
-
 if __name__ == "__main__":
-    global child_pids
     child_pids = []
 
     shared_mem = mmap.mmap(-1, 1024)
 
     pipe_in_dwtube, pipe_out_dwtube = os.pipe()
     pipe_in_wdtube, pipe_out_wdtube = os.pipe()
+
+    def kill_children(signum, frame):
+        global child_pids
+        print("Watchdog: Terminaison en cours...")
+        for pid in child_pids:
+            os.kill(pid, signal.SIGTERM)
+        sys.exit(0)
 
     signal.signal(signal.SIGTERM, kill_children)
     signal.signal(signal.SIGINT, kill_children)
