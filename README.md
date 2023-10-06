@@ -14,6 +14,9 @@ Pour manipuler un segment de mémoire partagé en Python 3 on utilise la librair
 2.b) Quel serveur doit s’arrêter en premier pour éviter les zombies ? Qu’est ce qu’un zombie au sens informatique /
 système d’opération ?
 
+C'est le serveur qui lance l'autre serveur qui doit s'arrêter en premier car si le serveur qui lance le second
+Un zombie dans le sens informatique / système d'opération est un processus qui a terminé son éxécution, mais qui n'a pas encore été complétement supprimer du système car tant que le processus parent ne récupére pas les informations que le processus fils, le processus fils ne se termine pas et il passe en état de processus zombie.
+
 3.a) Est-ce une bonne idée de lancer le serveur principal depuis le watch-dog puis les serveurs secondaires depuis le
 serveur principal ? Sachant que le watch-dog peut être amené à stopper et redémarrer [tous] les autres processus ? Doit-il
 déléguer le redémarrage d’un serveur secondaire au serveur principal, au risque de lui faire perdre en réactivité ?

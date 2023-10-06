@@ -1,26 +1,22 @@
 import os
 import time
 import signal
+import threading
+import socket
 from datetime import datetime
 
-# Variable pour terminer le serveur proprement
-shutdown = False
-
-# Handler pour SIGINT
-def handle_sigint(signum, frame):
-    global shutdown
-    print("Dispatcher: Reçu un signal d'interruption, terminaison en cours...")
-    shutdown = True
-    os._exit(0)
-
-# Enregistrer le handler
-signal.signal(signal.SIGINT, handle_sigint)
+def send_heartbeat_to_watchdog(pid):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(('localhost', 10000 + pid))
+    while True:
+        s.sendall(b'heartbeat')
+        time.sleep(2)
 
 def serveur_dispatcher(shared_mem, pipe_out_dwtube, pipe_in_wdtube):
-    global shutdown  # utiliser la variable globale
     token = True  # Initialise avec le jeton
+    threading.Thread(target=send_heartbeat_to_watchdog, args=(os.getpid(),)).start()
 
-    while not shutdown:  # utiliser la variable pour la condition
+    while True:  # utiliser la variable pour la condition
         if token:
             shared_mem.seek(0)
             shared_mem.write(b"get_time" + b'\x00' * (20 - len("get_time")))

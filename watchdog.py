@@ -3,6 +3,8 @@ import time
 import signal
 import sys
 import mmap
+import socket
+import threading
 from dispatcher import serveur_dispatcher
 from worker import serveur_worker
 
@@ -25,9 +27,6 @@ if not os.path.exists(dw_pipe_path):
 if not os.path.exists(wd_pipe_path):
     os.mkfifo(wd_pipe_path)
 
-if not os.path.exists('hearthbeats'):
-    os.makedirs('hearthbeats')
-
 child_pids = []
 
 def kill_children(signum, frame):
@@ -37,19 +36,26 @@ def kill_children(signum, frame):
     already_killed = True
     print("Watchdog: Terminaison en cours...")
     for pid in child_pids:
-        os.remove('hearthbeats/server_' + str(pid))
+        os.remove('heartbeats/server_' + str(pid))
         os.kill(pid, signal.SIGTERM)
     os.remove(dw_pipe_path)
     os.remove(wd_pipe_path)
     
     sys.exit(0)
 
-def check_alive(pid):
-    try:
-        os.kill(pid, signal.SIG_DFL)
-        return True
-    except ProcessLookupError:
-        return False
+def handle_heartbeat(conn, pid):
+    while True:
+        data = conn.recv(1024)
+        if not data:
+            print(f"Serveur {pid} est mort.")
+            break
+
+def launch_heartbeat_monitor(pid):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(('localhost', 10000 + pid))
+    s.listen(1)
+    conn, _ = s.accept()
+    threading.Thread(target=handle_heartbeat, args=(conn, pid)).start()
 
 def launch_server(func, args_tuple, child_pids):
     pid = os.fork()
@@ -62,10 +68,10 @@ def launch_server(func, args_tuple, child_pids):
         func(*args_tuple)
     else:
         print(f"Watchdog: J'ai lancé un serveur avec le PID {pid}.")
-        open('hearthbeats/server_' + str(pid), 'w').close()
+        launch_heartbeat_monitor(pid)
         child_pids.append(pid)
         return pid
-
+    
 if __name__ == "__main__":
     signal.signal(signal.SIGTERM, kill_children)
     signal.signal(signal.SIGINT, kill_children)
@@ -84,13 +90,7 @@ if __name__ == "__main__":
 
     print("Watchdog: Serveurs lancés.")
 
-    while True:
-        if not check_alive(dispatcher_pid):
-            print("Watchdog: Relance du serveur dispatcher.")
-            dispatcher_pid = launch_server(serveur_dispatcher, (shared_mem, pipe_out_dwtube, pipe_in_wdtube), child_pids)
+    
+       
 
-        if not check_alive(worker_pid):
-            print("Watchdog: Relance du serveur worker.")
-            worker_pid = launch_server(serveur_worker, (shared_mem, pipe_in_dwtube, pipe_out_wdtube), child_pids)
-
-        time.sleep(5)  # Vérifie l'état toutes les 5 secondes
+        

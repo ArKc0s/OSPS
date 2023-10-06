@@ -2,24 +2,21 @@ import os
 import time
 import mmap
 import signal
+import threading
+import socket
 from datetime import datetime
 
-# Variable pour terminer le serveur proprement
-shutdown = False
-
-# Handler pour SIGINT
-def handle_sigint(signum, frame):
-    global shutdown
-    print("Dispatcher: Reçu un signal d'interruption, terminaison en cours...")
-    shutdown = True
-    os._exit(0)
-
-# Enregistrer le handler
-signal.signal(signal.SIGINT, handle_sigint)
+def send_heartbeat_to_watchdog(pid):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(('localhost', 10000 + pid))
+    while True:
+        s.sendall(b'heartbeat')
+        time.sleep(2)
 
 def serveur_worker(shared_mem, pipe_in_dwtube, pipe_out_wdtube):
-    global shutdown  # utiliser la variable globale
-    while not shutdown:
+    threading.Thread(target=send_heartbeat_to_watchdog, args=(os.getpid(),)).start()
+    while True:
+
         try:
             msg = os.read(pipe_in_dwtube, 4).decode('utf-8')
         except BlockingIOError:
