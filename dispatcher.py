@@ -5,6 +5,9 @@ from datetime import datetime
 import select
 
 def serveur_dispatcher(shared_mem, pipe_out_dwtube, pipe_in_wdtube):
+
+    is_worker_ready = True
+
     host, port = '127.0.0.1', 42424
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -29,7 +32,7 @@ def serveur_dispatcher(shared_mem, pipe_out_dwtube, pipe_in_wdtube):
                 conn.setblocking(0)
                 inputs.append(conn)
                 print(f"Dispatcher: Connexion de {addr}")
-            elif src == conn:
+            elif src == conn and is_worker_ready:
                 data = conn.recv(1024)
                 if data:
                     print(f"Dispatcher: Requête reçue du client : {data.decode()}")
@@ -38,7 +41,16 @@ def serveur_dispatcher(shared_mem, pipe_out_dwtube, pipe_in_wdtube):
                     shared_mem.write((data.decode() + ' ' + str(addr) + '\x00' * (100 - len(data.decode()))).encode('utf-8'))
                     print("Dispatcher: J'ai envoyé la demande au worker.")
                     os.write(pipe_out_dwtube, b"ping")
+                    is_worker_ready = False
                     # fermer la connexion
+                    inputs.remove(conn)
+                    conn.close()
+                    conn = None
+                    print("Dispatcher: J'ai fermé la connexion avec le client.")
+            elif src == conn and not is_worker_ready:
+                data = conn.recv(1024)
+                if data:
+                    print(f"Dispatcher: Requête reçue du client : {data.decode()} mais worker indosponible")
                     inputs.remove(conn)
                     conn.close()
                     conn = None
@@ -47,3 +59,4 @@ def serveur_dispatcher(shared_mem, pipe_out_dwtube, pipe_in_wdtube):
                 msg = os.read(pipe_in_wdtube, 4).decode('utf-8')
                 if msg == "pong":
                     print(f"Dispatcher: Je sais que le worker est de nouveau prêt.")
+                    is_worker_ready = True

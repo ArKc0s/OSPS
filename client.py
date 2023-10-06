@@ -29,18 +29,30 @@ def main():
     s_listen.bind((local_address, local_port))  # utiliser les mêmes adresse IP et port
     s_listen.listen(1)
 
-    print(f"En attente de connexion du worker sur {local_address}:{local_port}")
-    conn, addr = s_listen.accept()
-    print(f"Connexion établie avec {addr}")
+    s_listen.settimeout(5.0)  # timeout de 5 secondes
 
-    data = conn.recv(1024)  # Attends la réponse
-    print(f"Reçu : {data.decode('utf-8')}")
+    try:
+        print(f"En attente de connexion du worker sur {local_address}:{local_port}")
+        conn, addr = s_listen.accept()
+        conn.settimeout(5.0) 
+        print(f"Connexion établie avec {addr}")
 
-    #envoi de la requete
-    conn.sendall(b"get_time")
+        try:
+            data = conn.recv(1024)  # Attends la réponse
+            print(f"Reçu : {data.decode('utf-8')}")
 
-    data = conn.recv(1024)  # Attends la réponse
-    print(f"Reçu : {data.decode('utf-8')}")
+            #envoi de la requete
+            conn.sendall(b"get_time")
+
+            data = conn.recv(1024)  # Attends la réponse
+            print(f"Reçu : {data.decode('utf-8')}")
+        except socket.timeout:
+            print("Timeout lors de la réception des données.")
+            
+    except socket.timeout:
+        print("Timeout lors de la connexion du worker.")
+        return
+
 
     conn.close()
     s_listen.close()
