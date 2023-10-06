@@ -53,7 +53,7 @@ def launch_server(func, args_tuple, child_pids):
         print(f"Watchdog: J'ai lancé un serveur avec le PID {pid}.")
         child_pids.append(pid)
         return pid
-
+    
 if __name__ == "__main__":
     signal.signal(signal.SIGTERM, kill_children)
     signal.signal(signal.SIGINT, kill_children)
@@ -61,9 +61,9 @@ if __name__ == "__main__":
     print("Je suis le watchdog.")
 
     shared_mem = mmap.mmap(-1, 1024)
-    pipe_in_dwtube = os.open(dw_pipe_path, os.O_RDONLY)
+    pipe_in_dwtube = os.open(dw_pipe_path, os.O_RDONLY | os.O_NONBLOCK)
     pipe_out_dwtube = os.open(dw_pipe_path, os.O_WRONLY)
-    pipe_in_wdtube = os.open(wd_pipe_path, os.O_RDONLY)
+    pipe_in_wdtube = os.open(wd_pipe_path, os.O_RDONLY | os.O_NONBLOCK)
     pipe_out_wdtube = os.open(wd_pipe_path, os.O_WRONLY)
 
 
@@ -73,4 +73,5 @@ if __name__ == "__main__":
     print("Watchdog: Serveurs lancés.")
 
     while True:
-        time.sleep(5)
+        time.sleep(5)  # Vérifie l'état toutes les 5 secondes
+        
