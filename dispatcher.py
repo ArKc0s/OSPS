@@ -3,24 +3,10 @@ import time
 import signal
 from datetime import datetime
 
-# Variable pour terminer le serveur proprement
-shutdown = False
-
-# Handler pour SIGINT
-def handle_sigint(signum, frame):
-    global shutdown
-    print("Dispatcher: Reçu un signal d'interruption, terminaison en cours...")
-    shutdown = True
-    os._exit(0)
-
-# Enregistrer le handler
-signal.signal(signal.SIGINT, handle_sigint)
-
 def serveur_dispatcher(shared_mem, pipe_out_dwtube, pipe_in_wdtube):
-    global shutdown  # utiliser la variable globale
     token = True  # Initialise avec le jeton
 
-    while not shutdown:  # utiliser la variable pour la condition
+    while True:  # utiliser la variable pour la condition
         if token:
             shared_mem.seek(0)
             shared_mem.write(b"get_time" + b'\x00' * (20 - len("get_time")))
