@@ -7,6 +7,7 @@ import select
 def serveur_dispatcher(shared_mem, pipe_out_dwtube, pipe_in_wdtube):
     host, port = '127.0.0.1', 42424
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind((host, port))
     s.listen(5)
     s.setblocking(0)  # non-blocking
@@ -33,13 +34,16 @@ def serveur_dispatcher(shared_mem, pipe_out_dwtube, pipe_in_wdtube):
                 if data:
                     print(f"Dispatcher: Requête reçue du client : {data.decode()}")
                     shared_mem.seek(0)
-                    shared_mem.write(b"get_time" + b'\x00' * (20 - len("get_time")))
-                    print("Dispatcher: J'ai écrit la commande 'get_time' dans la mémoire partagée.")
+                    # ecrire les infos du client dans la mémoire partagée avec un message signalant qu'il y'a une requête
+                    shared_mem.write((data.decode() + ' ' + str(addr) + '\x00' * (100 - len(data.decode()))).encode('utf-8'))
+                    print("Dispatcher: J'ai envoyé la demande au worker.")
                     os.write(pipe_out_dwtube, b"ping")
+                    # fermer la connexion
+                    inputs.remove(conn)
+                    conn.close()
+                    conn = None
+                    print("Dispatcher: J'ai fermé la connexion avec le client.")
             elif src == pipe_in_wdtube:
                 msg = os.read(pipe_in_wdtube, 4).decode('utf-8')
-                if msg == "pong" and conn:
-                    shared_mem.seek(0)
-                    time_response = shared_mem.read(50).decode('utf-8').rstrip('\x00')
-                    print(f"Dispatcher: J'ai reçu l'heure : {time_response}")
-                    conn.send(time_response.encode('utf-8'))
+                if msg == "pong":
+                    print(f"Dispatcher: Je sais que le worker est de nouveau prêt.")
