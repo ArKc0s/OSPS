@@ -1,10 +1,25 @@
 import os
 import time
 import mmap
+import signal
 from datetime import datetime
 
+# Variable pour terminer le serveur proprement
+shutdown = False
+
+# Handler pour SIGINT
+def handle_sigint(signum, frame):
+    global shutdown
+    print("Dispatcher: Reçu un signal d'interruption, terminaison en cours...")
+    shutdown = True
+    os._exit(0)
+
+# Enregistrer le handler
+signal.signal(signal.SIGINT, handle_sigint)
+
 def serveur_worker(shared_mem, pipe_in_dwtube, pipe_out_wdtube):
-    while True:
+    global shutdown  # utiliser la variable globale
+    while not shutdown:
         try:
             msg = os.read(pipe_in_dwtube, 4).decode('utf-8')
         except BlockingIOError:
