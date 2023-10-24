@@ -4,7 +4,7 @@ import time
 
 def main():
     host = '127.0.0.1'  # L'adresse du serveur
-    port = 42424        # Assure-toi que c'est le même port que celui du serveur
+    port = 42424       # Le port utilisé par le serveur
 
     # Socket pour la connexion au dispatcher
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
