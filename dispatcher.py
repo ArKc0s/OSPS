@@ -38,19 +38,14 @@ def serveur_dispatcher(shared_mem, pipe_out_dwtube, pipe_in_wdtube):
                     print(f"Dispatcher: Requête reçue du client : {data.decode()}")
                     shared_mem.seek(0)
                     # ecrire les infos du client dans la mémoire partagée avec un message signalant qu'il y'a une requête
-                    shared_mem.write((data.decode() + ' ' + str(addr) + '\x00' * (100 - len(data.decode()))).encode('utf-8'))
+                    shared_mem.write((data.decode() + '\x00' * (100 - len(data.decode()))).encode('utf-8'))
                     print("Dispatcher: J'ai envoyé la demande au worker.")
                     os.write(pipe_out_dwtube, b"ping")
                     is_worker_ready = False
-                    # fermer la connexion
-                    inputs.remove(conn)
-                    conn.close()
-                    conn = None
-                    print("Dispatcher: J'ai fermé la connexion avec le client.")
             elif src == conn and not is_worker_ready:
                 data = conn.recv(1024)
                 if data:
-                    print(f"Dispatcher: Requête reçue du client : {data.decode()} mais worker indosponible")
+                    print(f"Dispatcher: Requête reçue du client : {data.decode()} mais worker indisponible")
                     inputs.remove(conn)
                     conn.close()
                     conn = None
@@ -58,5 +53,21 @@ def serveur_dispatcher(shared_mem, pipe_out_dwtube, pipe_in_wdtube):
             elif src == pipe_in_wdtube:
                 msg = os.read(pipe_in_wdtube, 4).decode('utf-8')
                 if msg == "pong":
-                    print(f"Dispatcher: Je sais que le worker est de nouveau prêt.")
-                    is_worker_ready = True
+
+                    shared_mem.seek(0)
+                    command = shared_mem.read(100).decode('utf-8').rstrip('\x00')
+
+                    if command.startswith('hey_buddy_i_am_ok'):
+                        print(f"Dispatcher: Le worker est prêt.")
+                        addr, port = command.split(' ')[1:]
+                    
+                        # On envoie au client auquel on est déjà connecté les infos du worker
+                        conn.sendall((addr + ' ' + port).encode('utf-8'))
+                        print(f"Dispatcher: J'ai envoyé les infos du worker au client.")
+                        inputs.remove(conn)
+                        conn.close()
+                        conn = None
+                        print("Dispatcher: J'ai fermé la connexion avec le client.")
+                    elif command.startswith('hey_i_finished'):
+                        print(f"Dispatcher: Je sais que le worker est de nouveau prêt.")
+                        is_worker_ready = True
