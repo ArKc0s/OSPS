@@ -34,3 +34,12 @@ du client ;
 5) Le client et le serveur secondaire échangent quelques informations et coupent la connexion ;
 6) Le client coupe la connexion avec le serveur principal, sauf s’il a une autre requête à soumettre, auquel cas
 retour à l’étape 2
+
+Nous sommes partis sur la solution alternative qui consiste : 
+1) le client crée le premier contact avec le serveur principal (dispatcher) pour l'informer qu'il à une requête à lui faire faire
+2) le serveur principal informe le serveur secondaire (worker) qu'il a du travail pour lui et lui indique vià la mémoire partagé l'IP et le port du client (le port utilisé est le même que celui utilisé lors de la connexion initiale entre le client et le serveur principal)
+3) le serveur secondaire contact le serveur principal vià l'IP et le port en mémoire partagé pour lui indiquer qu'il est prêt à travailler et attends la requête 
+4) le client donne la requête au serveur secondaire qu'il doit faire pour lui 
+5) après avoir éxécuté la requête, le serveur secondaire renvoie la réponse au client 
+6) le serveur secondaire informe le serveur principal qu'il a fini la requête du client et qu'il est de nouveau prêt à recevoir une demande
+
