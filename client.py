@@ -5,14 +5,14 @@ Version: 3.1
 
 Description:
     Ce script réalise les étapes suivantes :
-    1. Établit une connexion TCP avec un dispatcher sur l'adresse et le port donnés.
-    2. Envoie une requête initiale ("i_have_a_request_please") au dispatcher.
-    3. Reçoit l'adresse et le port d'un worker du dispatcher.
-    4. Ferme la connexion avec le dispatcher.
-    5. Établit une nouvelle connexion TCP avec le worker.
-    6. Envoie une requête ("get_time") au worker.
-    7. Reçoit la réponse du worker, qui est censée être l'heure actuelle.
-    8. Ferme la connexion avec le worker.
+        1. Établit une connexion TCP avec un dispatcher sur l'adresse et le port donnés.
+        2. Envoie une requête initiale ("i_have_a_request_please") au dispatcher.
+        3. Reçoit l'adresse et le port d'un worker du dispatcher.
+        4. Ferme la connexion avec le dispatcher.
+        5. Établit une nouvelle connexion TCP avec le worker.
+        6. Envoie une requête ("get_time") au worker.
+        7. Reçoit la réponse du worker, qui est censée être l'heure actuelle.
+        8. Ferme la connexion avec le worker.
     
     Note : Des timeouts sont ajoutés pour chaque opération réseau pour une meilleure robustesse.
 """
