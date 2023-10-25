@@ -19,66 +19,72 @@ Description:
 
 import socket
 import struct
+import time
 
+# Nombre de tentatives de connexion avant abandon et timeout pour chaque opération réseau
+MAX_RETRIES = 3
+TIMEOUT = 5
+# Adresse et port du serveur dispatcher
+ADDR = '127.0.0.1'
+PORT = 42424
 
 def main():
-    host = '127.0.0.1'  # L'adresse du serveur
-    port = 42424        # Le port utilisé par le serveur
-    timeout = 5         # Timeout en secondes
+    
+    # Nombre de tentatives de connexion
+    retries = 0
 
-    # Crée un socket pour la connexion au dispatcher
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        
-        # Définir un timeout pour la connexion et les opérations de socket
-        s.settimeout(timeout)
-        
+    while retries < MAX_RETRIES:
         try:
-            # Tentative de connexion au dispatcher
-            s.connect((host, port))
-            local_address, local_port = s.getsockname()
-            print(f"Je suis {local_address}:{local_port}")
-        except (ConnectionRefusedError, socket.timeout):
-            print("Impossible de se connecter au serveur.")
-            return
+            # Crée un socket pour la connexion avec le dispatcher
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(TIMEOUT)
+                s.connect((ADDR, PORT))
+                local_address, local_port = s.getsockname()
+                print(f"Je suis {local_address}:{local_port}")
+                
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
+                
+                # Envoie une requête initiale au dispatcher
+                try:
+                    s.sendall(b'i_have_a_request_please')
+                    data = s.recv(1024)
+                except (socket.timeout, socket.error):
+                    print("Erreur lors de l'envoi ou de la réception des données avec le dispatcher.")
+                    retries += 1
+                    continue
 
-        # Définir l'option SO_LINGER à zéro pour une fermeture immédiate
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
+                # Reçoit l'adresse et le port d'un worker
+                print(f"Reçu : {data.decode('utf-8')}")
+                addr, port = data.decode('utf-8').split(' ')
+                port = int(port)
 
-        # Envoie la requête initiale au dispatcher
-        s.sendall(b'i_have_a_request_please')
+            # Crée un socket pour la connexion avec le worker   
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(TIMEOUT)
+                s.connect((addr, port))
+                print(f"Je suis connecté à {addr}:{port}")
 
-        try:
-            # Attends les infos du worker
-            data = s.recv(1024)
-        except socket.timeout:
-            print("Timeout lors de la réception des données.")
-            return
+                # Envoie une requête au worker
+                try:
+                    s.sendall(b'get_time')
+                    data = s.recv(1024)
+                except (socket.timeout, socket.error):
+                    print("Erreur lors de l'envoi ou de la réception des données avec le worker.")
+                    return
+                
+                # Reçoit la réponse du worker
+                print(f"Reçu : {data.decode('utf-8')}")
+                s.close()
+            break
 
-        print(f"Reçu : {data.decode('utf-8')}")
-        addr, port = data.decode('utf-8').split(' ')
-        port = int(port)
+        except (ConnectionRefusedError, socket.timeout, socket.error, OSError) as e:
+            print(f"Impossible de se connecter au serveur. Erreur : {e}")
+            retries += 1
 
-    # Crée un socket pour la connexion au worker
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        
-        # Définir un timeout pour la connexion et les opérations de socket
-        s.settimeout(timeout)
+        time.sleep(3)
 
-        # Tentative de connexion au worker
-        s.connect((addr, port))
-        print(f"Je suis connecté à {addr}:{port}")
-
-        # Envoie la requête 'get_time' au worker
-        s.sendall(b'get_time')
-
-        try:
-            # Attends la réponse du worker
-            data = s.recv(1024)
-        except socket.timeout:
-            print("Timeout lors de la réception des données.")
-            return
-
-        print(f"Reçu : {data.decode('utf-8')}")
+    if retries == MAX_RETRIES:
+        print("Trop de tentatives infructueuses, abandon.")
 
 if __name__ == "__main__":
     main()
