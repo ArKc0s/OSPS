@@ -34,7 +34,7 @@ Ce n'est pas une bonne idée que le watch-dog utilise les tubes de communication
 (au sens du système d’exploitation) ? Est-ce que le père d’un processus est informé de l’arrêt d’un processus fils par un
 signal ?
 
-L'utilisation des signaux n'est pas 
+Les signaux peuvent entraîner des problèmes de synchronisation et des comportements inattendus s'ils ne sont pas correctement gérés. Par exemple, l'envoi multiple de signaux pourrait écraser des signaux précédents non traités. De plus, les erreurs dans la gestion des signaux peuvent causer la terminaison imprévue de processus. Ainsi, bien que les signaux offrent une manière de recevoir des notifications des processus fils, leur utilisation nécessite une grande prudence et une gestion attentive.
 
 1) Le client se connecte via un socket en TCP au port 2222 du serveur principal ;
 2) Le client envoie un type de requête au serveur (pour les tests, « requetetype1 » ou « requetetype2 ») ;

@@ -18,14 +18,38 @@ Description:
 
 import server
 import os
+import threading
 import time
+import sys
 import socket
 import select
 
 ADDR = '127.0.0.1'
 PORT = 42424
+WD_PORT = 25566
 
 def serveur_dispatcher(shared_mem, pipe_out_dwtube, pipe_in_wdtube):
+
+    #Socket d'écoute des rquêtes du watchdog
+    s_wd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s_wd.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s_wd.bind((ADDR, WD_PORT))
+    s_wd.listen(1)
+    s_wd.settimeout(5.0)
+
+    # Attends la connexion du watchdog
+    try:
+        print(f"Dispatcher: En attente de connexion du watchdog sur {ADDR}:{WD_PORT}")
+        conn_wd, addr_wd = s_wd.accept()
+        conn_wd.settimeout(15.0)
+        print(f"Dispatcher: Connexion établie avec {addr_wd}")
+    except socket.timeout:
+        # Watchdog non connecté, exit
+        print("Dispatcher: Watchdog non connecté")
+
+    # Démarrer le thread pour le watchdog
+    watchdog_thread = threading.Thread(target=watchdog_ping_pong, args=(conn_wd,))
+    watchdog_thread.start()
 
     is_worker_ready = True
 
@@ -95,4 +119,14 @@ def serveur_dispatcher(shared_mem, pipe_out_dwtube, pipe_in_wdtube):
         except (socket.error, BlockingIOError, select.error, BrokenPipeError) as e:
             print(f"Dispatcher: Une erreur s'est produite : {e}")
             continue
+
+def watchdog_ping_pong(conn_wd):
+    while True:
+        try:
+            msg = conn_wd.recv(1024).decode('utf-8')
+            if msg == "ping":
+                conn_wd.sendall(b"pong")
+                print("Dispatcher: J'ai reçu un ping du watchdog")
+        except (BrokenPipeError, ConnectionResetError, socket.error):
+            print("Dispatcher: Erreur lors de la réception des données du watchdog.")
     

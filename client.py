@@ -42,6 +42,7 @@ def main():
                 local_address, local_port = s.getsockname()
                 print(f"Je suis {local_address}:{local_port}")
                 
+                # Evite le problème de "Address already in use" lors de la fermeture du socket
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
                 
                 # Envoie une requête initiale au dispatcher
