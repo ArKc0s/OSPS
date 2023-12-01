@@ -1,17 +1,4 @@
 # OSPS
-Pas de signaux simple (unix) en python 
-écriture bufferisée dans les tubes 
-.flush > open close (déjà bien)
-segment mémoire partagé système 
-
-1) Le client se connecte via un socket en TCP au port 2222 du serveur principal ;
-2) Le client envoie un type de requête au serveur (pour les tests, « requetetype1 » ou « requetetype2 ») ;
-3) Le serveur principal retourne un numéro de port > 2222, géré (en TCP) par le serveur secondaire ;
-4) Il y a établissement d’une connexion directe en TCP entre le client et le serveurs secondaire chargé de la requête
-du client ;
-5) Le client et le serveur secondaire échangent quelques informations et coupent la connexion ;
-6) Le client coupe la connexion avec le serveur principal, sauf s’il a une autre requête à soumettre, auquel cas
-retour à l’étape 2
 
 Dans un premier temps, nous avons tester un premier parcours qui est le suivant : 
 1) Le client envoie une requête au serveur principal (dispatcher) vià une socquette 
@@ -29,3 +16,5 @@ Par la suite, nous sommes partis sur la solution alternative qui consiste :
 
 Pour finir sur la partie sans watchdog, nous avons implémenté la solution idéale :
 Par rapport à la solution précédente, ce n'est plus le serveur secondaire (worker) qui contact directement le client mais c'est le client qui va contacté le serveur secondaire. Pour cela, au lieu de trasmettre l'IP et le port du client, c'est le serveur secondaire qui va indiquer au serveur principal son IP et le port sur lequel le client pourra le contacter pour sa requête. Le serveur principal transmets ces informations au client et ce dernier contact directement le serveur secondaire. Les autres étapes du procédé reste les mêmes. 
+
+Pour la partie avec watchdog, nous avons implémenté la solution suivante :
